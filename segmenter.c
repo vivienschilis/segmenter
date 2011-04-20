@@ -372,7 +372,7 @@ int main(int argc, char **argv)
         av_free_packet(&packet);
     } while (!decode_done);
 
-f    av_write_trailer(oc);
+    av_write_trailer(oc);
 
 
     avcodec_close(video_st->codec);
