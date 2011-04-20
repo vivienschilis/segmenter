@@ -301,15 +301,12 @@ int main(int argc, char **argv)
     }
 
     write_index = !write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, last_segment, 0, max_tsfiles);
-    printf("heeyre1\n");
 
     do {
         double segment_time;
         AVPacket packet;
 
-	printf("heeyre\n");
         decode_done = av_read_frame(ic, &packet);
-	printf("heeyre2\n");
         if (decode_done < 0) {
             break;
         }
@@ -330,9 +327,7 @@ int main(int argc, char **argv)
             segment_time = prev_segment_time;
         }
 
-	printf("heeyre3\n");
         if (segment_time - prev_segment_time >= segment_duration) {
-	   printf("heeyre32\n");
             avio_flush(oc->pb);
             avio_close(oc->pb);
 
@@ -345,9 +340,7 @@ int main(int argc, char **argv)
             }
 
             if (write_index) {
-		printf("heeyre4\n");
                 write_index = !write_index_file(index, tmp_index, segment_time - prev_segment_time, output_prefix, http_prefix, first_segment, ++last_segment, 0, max_tsfiles);
-		printf("heeyre5\n");
             }
 
             if (remove_file) {
@@ -364,9 +357,7 @@ int main(int argc, char **argv)
             prev_segment_time = segment_time;
         }
 
-        printf("heeyre33\n");
         ret = av_interleaved_write_frame(oc, &packet);
-        printf("heeyre34\n");
 
         if (ret < 0) {
             fprintf(stderr, "Warning: Could not write frame of stream\n");
@@ -381,8 +372,7 @@ int main(int argc, char **argv)
         av_free_packet(&packet);
     } while (!decode_done);
 
-   printf("done\n");
-    av_write_trailer(oc);
+f    av_write_trailer(oc);
 
 
     avcodec_close(video_st->codec);
