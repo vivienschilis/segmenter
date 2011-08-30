@@ -20,6 +20,8 @@
 
 #include "libavformat/avformat.h"
 
+#define MAX_TS_FILES_DEFAULT 1000
+
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
     AVCodecContext *input_codec_context;
     AVCodecContext *output_codec_context;
@@ -79,7 +81,7 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
     return output_stream;
 }
 
-int write_index_file(const char index[], const char tmp_index[], const unsigned int segment_duration, const char output_prefix[], const char http_prefix[], const unsigned int first_segment, const unsigned int last_segment, const int end, const int window) {
+int write_index_file(const char index[], const char tmp_index[], const unsigned int segment_duration, const char output_prefix[], const char http_prefix[], const unsigned int first_segment, const unsigned int last_segment, const int end, const int window, const unsigned int actual_segment_durations[]) {
     FILE *index_fp;
     char *write_buf;
     unsigned int i;
@@ -111,7 +113,7 @@ int write_index_file(const char index[], const char tmp_index[], const unsigned 
     }
 
     for (i = first_segment; i <= last_segment; i++) {
-        snprintf(write_buf, 1024, "#EXTINF:%u,\n%s%s-%u.ts\n", segment_duration, http_prefix, output_prefix, i);
+      snprintf(write_buf, 1024, "#EXTINF:%u,\n%s%s-%u.ts\n", actual_segment_durations[i-1], http_prefix, output_prefix, i);
         if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
             fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
             free(write_buf);
@@ -194,6 +196,8 @@ int main(int argc, char **argv)
             fprintf(stderr, "Maximum number of ts files (%s) invalid\n", argv[6]);
             exit(1);
         }
+    } else {
+      max_tsfiles = MAX_TS_FILES_DEFAULT;
     }
 
     remove_filename = malloc(sizeof(char) * (strlen(output_prefix) + 15));
@@ -228,7 +232,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    ret = av_open_input_file(&ic, input, ifmt, 0, NULL);
+    ret = avformat_open_input(&ic, input, ifmt, NULL);
+    
     if (ret != 0) {
         fprintf(stderr, "Could not open input file, make sure it is an mpegts file: %d\n", ret);
         exit(1);
@@ -273,36 +278,38 @@ int main(int argc, char **argv)
         }
     }
 
-    if (av_set_parameters(oc, NULL) < 0) {
-        fprintf(stderr, "Invalid output format parameters\n");
-        exit(1);
-    }
-
+    fprintf(stderr, "hherr\n");
+    
     av_dump_format(oc, 0, output_prefix, 1);
 
-    codec = avcodec_find_decoder(video_st->codec->codec_id);
-    if (!codec) {
+    if (video_index >=0) {
+      codec = avcodec_find_decoder(video_st->codec->codec_id);
+      if (!codec) {
         fprintf(stderr, "Could not find video decoder, key frames will not be honored\n");
-    }
+      }
 
-    if (avcodec_open(video_st->codec, codec) < 0) {
+      if (avcodec_open(video_st->codec, codec) < 0) {
         fprintf(stderr, "Could not open video decoder, key frames will not be honored\n");
+      }
     }
 
     snprintf(output_filename, strlen(output_prefix) + 15, "%s-%u.ts", output_prefix, output_index++);
-    if (avio_open(&oc->pb, output_filename, URL_WRONLY) < 0) {
+    if (avio_open(&oc->pb, output_filename, AVIO_FLAG_WRITE) < 0) {
         fprintf(stderr, "Could not open '%s'\n", output_filename);
         exit(1);
     }
 
-    if (av_write_header(oc)) {
+    if (avformat_write_header(oc, NULL) < 0) {
         fprintf(stderr, "Could not write mpegts header to first output file\n");
         exit(1);
     }
 
-    write_index = !write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, last_segment, 0, max_tsfiles);
+ 
+    unsigned int *actual_segment_durations = malloc(sizeof(unsigned int) * MAX_TS_FILES_DEFAULT);
+    write_index = !write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, last_segment, 0, max_tsfiles, actual_segment_durations);
 
     do {
+	unsigned int current_segment_duration;
         double segment_time;
         AVPacket packet;
 
@@ -327,6 +334,8 @@ int main(int argc, char **argv)
             segment_time = prev_segment_time;
         }
 
+	current_segment_duration = (int) round(segment_time - prev_segment_time);
+	actual_segment_durations[last_segment] = (current_segment_duration > 0 ? current_segment_duration: 1);
         if (segment_time - prev_segment_time >= segment_duration) {
             avio_flush(oc->pb);
             avio_close(oc->pb);
@@ -340,7 +349,7 @@ int main(int argc, char **argv)
             }
 
             if (write_index) {
-                write_index = !write_index_file(index, tmp_index, segment_time - prev_segment_time, output_prefix, http_prefix, first_segment, ++last_segment, 0, max_tsfiles);
+	      write_index = !write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, ++last_segment, 0, max_tsfiles, actual_segment_durations);
             }
 
             if (remove_file) {
@@ -349,7 +358,7 @@ int main(int argc, char **argv)
             }
 
             snprintf(output_filename, strlen(output_prefix) + 15, "%s-%u.ts", output_prefix, output_index++);
-            if (avio_open(&oc->pb, output_filename, URL_WRONLY) < 0) {
+            if (avio_open(&oc->pb, output_filename, AVIO_FLAG_WRITE) < 0) {
                 fprintf(stderr, "Could not open '%s'\n", output_filename);
                 break;
             }
@@ -358,10 +367,8 @@ int main(int argc, char **argv)
         }
 
         ret = av_interleaved_write_frame(oc, &packet);
-
         if (ret < 0) {
             fprintf(stderr, "Warning: Could not write frame of stream\n");
-	    break;
         }
         else if (ret > 0) {
             fprintf(stderr, "End of stream requested\n");
@@ -374,8 +381,9 @@ int main(int argc, char **argv)
 
     av_write_trailer(oc);
 
-
-    avcodec_close(video_st->codec);
+    if (video_index >= 0) {
+      avcodec_close(video_st->codec);
+    }
 
     for(i = 0; i < oc->nb_streams; i++) {
         av_freep(&oc->streams[i]->codec);
@@ -394,13 +402,15 @@ int main(int argc, char **argv)
     }
 
     if (write_index) {
-        write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, ++last_segment, 1, max_tsfiles);
+      write_index_file(index, tmp_index, segment_duration, output_prefix, http_prefix, first_segment, ++last_segment, 1, max_tsfiles, actual_segment_durations);
     }
 
     if (remove_file) {
         snprintf(remove_filename, strlen(output_prefix) + 15, "%s-%u.ts", output_prefix, first_segment - 1);
         remove(remove_filename);
     }
+
+    free(actual_segment_durations);
 
     return 0;
 }
