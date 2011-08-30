@@ -33,7 +33,7 @@ struct segment_context {
 
 void display_usage()
 {
-    printf("Usage: sementer [OPTION]...\n");
+    printf("Usage: segmenter [OPTION]...\n");
     printf("\n");
     printf("HTTP Live Streaming - Segments TS file and creates M3U8 index.");
     printf("\n");
@@ -232,7 +232,7 @@ create_segments(struct segment_context * ctx) {
        exit(1);
    }
 
-   ret = av_open_input_file(&ic, ctx->input, ifmt, 0, NULL);
+   ret = avformat_open_input(&ic, ctx->input, ifmt, NULL);
    if (ret != 0) {
        fprintf(stderr, "Could not open input file, make sure it is an mpegts file: %d\n", ret);
        exit(1);
@@ -280,11 +280,6 @@ create_segments(struct segment_context * ctx) {
        }
    }
 
-   if (av_set_parameters(oc, NULL) < 0) {
-       fprintf(stderr, "Invalid output format parameters\n");
-       exit(1);
-   }
-
    av_dump_format(oc, 0, ctx->output_prefix, 1);
 
    codec = avcodec_find_decoder(video_st->codec->codec_id);
@@ -308,7 +303,7 @@ create_segments(struct segment_context * ctx) {
        exit(1);
    }
 
-   if (av_write_header(oc)) {
+   if (avformat_write_header(oc, NULL) < 0) {
        fprintf(stderr, "Could not write mpegts header to first output file\n");
        exit(1);
    }
@@ -385,10 +380,7 @@ create_segments(struct segment_context * ctx) {
     avio_close(oc->pb);
     av_free(oc);
 
-		index_file_close(ctx);
-
-    return 0;
-
+    index_file_close(ctx);
 }
 
 void 
