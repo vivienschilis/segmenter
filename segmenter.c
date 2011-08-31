@@ -37,10 +37,10 @@ void display_usage()
     printf("\n");
     printf("HTTP Live Streaming - Segments TS file and creates M3U8 index.");
     printf("\n");
-    printf("-f\t TS file to segment (Use - for stdin)\n");
+    printf("-i\t TS file to segment (Use - for stdin)\n");
     printf("-t\t Duration of each segment (default: 10 seconds)\n");
     printf("-p\t Prefix for the TS segments, will be appended\n");
-    printf("-i\t M3U8 index filename\n");
+    printf("-I\t M3U8 index filename\n");
     printf("-b\t Base url for web address of segments, e.g. http://example.org/video/\n");
     printf("-h\t This help\n");
     printf("\n");
@@ -409,7 +409,7 @@ main (int argc, char **argv)
   int index;
   int c;
 	
-  while ((c = getopt (argc, argv, "b:t:i:p:f:h")) != -1)
+  while ((c = getopt (argc, argv, "b:t:I:p:i:h")) != -1)
     switch (c)
       {
       case 'b':
@@ -418,10 +418,10 @@ main (int argc, char **argv)
       case 'p':
         ctx.output_prefix = optarg;
         break;
-      case 'f':
+      case 'i':
         ctx.input = optarg;
         break;
-      case 'i':
+      case 'I':
         ctx.index_file = optarg;
         break;
       case 'h':
