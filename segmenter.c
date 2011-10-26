@@ -331,10 +331,7 @@ create_segments(struct segment_context * ctx) {
         else if (video_index < 0) {
             segment_time = (double)audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
         }
-        else {
-            segment_time = prev_segment_time;
-        }
-				
+
         if (segment_time - prev_segment_time >= ctx->segment_duration) {	
             avio_flush(oc->pb);
             avio_close(oc->pb);
