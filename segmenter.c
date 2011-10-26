@@ -366,7 +366,7 @@ create_segments(struct segment_context * ctx) {
     } while (!decode_done);
 
 		double input_duration = (double)ic->duration / 1000000;
-		index_file_write_segment(ctx, input_duration - prev_segment_time, output_index-1);
+		index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
 
     av_write_trailer(oc);
 
