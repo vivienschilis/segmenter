@@ -360,7 +360,7 @@ create_segments(struct segment_context * ctx) {
         }
 
         av_free_packet(&packet);
-    } while (!decode_done);
+    } while (1); /* loop is exited on break */
 
 		double input_duration = (double)ic->duration / 1000000;
 		index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
