@@ -142,10 +142,13 @@ add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream
     AVCodecContext *output_codec_context;
     AVStream *output_stream;
 
-    output_stream = av_new_stream(output_format_context, 0);
+    output_stream = avformat_new_stream(output_format_context, NULL);
+
     if (!output_stream) {
         fprintf(stderr, "Could not allocate stream\n");
         exit(1);
+    }else{
+        output_stream->id = 0;
     }
 
     input_codec_context = input_stream->codec;
@@ -238,7 +241,7 @@ create_segments(struct segment_context * ctx) {
        exit(1);
    }
 
-	if (av_find_stream_info(ic) < 0) {
+  if (avformat_find_stream_info(ic, NULL) < 0) {
       fprintf(stderr, "Could not read stream information\n");
       exit(1);
   }
@@ -331,10 +334,7 @@ create_segments(struct segment_context * ctx) {
         else if (video_index < 0) {
             segment_time = (double)audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
         }
-        else {
-            segment_time = prev_segment_time;
-        }
-				
+
         if (segment_time - prev_segment_time >= ctx->segment_duration) {	
             avio_flush(oc->pb);
             avio_close(oc->pb);
@@ -363,10 +363,10 @@ create_segments(struct segment_context * ctx) {
         }
 
         av_free_packet(&packet);
-    } while (!decode_done);
+    } while (1); /* loop is exited on break */
 
 		double input_duration = (double)ic->duration / 1000000;
-		index_file_write_segment(ctx, input_duration - prev_segment_time, output_index-1);
+		index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
 
     av_write_trailer(oc);
 
