@@ -453,7 +453,7 @@ main (int argc, char **argv)
       fprintf(stderr, "Using stdin as input.\n");
     }
 
-	if(ctx.output_prefix == NULL && !ctx.index_file == NULL) {
+	if(ctx.output_prefix == NULL && ctx.index_file != NULL) {
 		
 		char * dot = strrchr(ctx.index_file,'.');
 		if (dot == NULL) {
@@ -467,7 +467,7 @@ main (int argc, char **argv)
 	}
 	
     if (ctx.output_prefix == NULL) {
-        fprintf(stderr,"Output prefix unspecified: %s", ctx.output_prefix);
+        fprintf(stderr,"Output prefix unspecified");
         exit(4);
     }
 
