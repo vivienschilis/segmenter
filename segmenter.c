@@ -57,11 +57,14 @@ int
 index_file_write_headers(struct segment_context * ctx){
 }
 
-void 
+int
 index_file_open(struct segment_context * ctx){
   char *write_buf;
 
-	ctx->index_fp = fopen(ctx->index_file, "w");
+  if(ctx->index_file == NULL)
+    return -1;
+
+  ctx->index_fp = fopen(ctx->index_file, "w");
   if (!ctx->index_fp) {
       fprintf(stderr, "Could not open temporary m3u8 index file (%s), no index file will be created\n", ctx->index_file);
       exit(1);
@@ -74,12 +77,7 @@ index_file_open(struct segment_context * ctx){
       exit(1);
   }
 
-  // if (window) {
-  //     snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n#EXT-X-MEDIA-SEQUENCE:%u\n", segment_duration, first_segment);
-  // }
-  // else {
   snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n", ctx->segment_duration);
-  // }
   if (fwrite(write_buf, strlen(write_buf), 1, ctx->index_fp) != 1) {
 
       fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
@@ -89,6 +87,7 @@ index_file_open(struct segment_context * ctx){
   }
 
   free(write_buf);
+  return 0;
 }
 
 
@@ -210,8 +209,8 @@ create_segments(struct segment_context * ctx) {
    AVOutputFormat *ofmt;
    AVFormatContext *ic = NULL;
    AVFormatContext *oc;
-   AVStream *video_st;
-   AVStream *audio_st;
+   AVStream *video_st = NULL;
+   AVStream *audio_st = NULL;;
    AVCodec *codec;
 
    char *output_filename;
@@ -226,6 +225,7 @@ create_segments(struct segment_context * ctx) {
    int ret;
    int i;
    int remove_file;
+   int write_index = -1;
 
    av_register_all();
 
@@ -252,8 +252,10 @@ create_segments(struct segment_context * ctx) {
       exit(1);
   }
 
-	index_file_open(ctx);
-	index_file_write_headers(ctx);
+  write_index = index_file_open(ctx);
+
+  if(write_index >= 0)
+    index_file_write_headers(ctx);
 
   oc = avformat_alloc_context();
   if (!oc) {
@@ -285,19 +287,21 @@ create_segments(struct segment_context * ctx) {
 
    av_dump_format(oc, 0, ctx->output_prefix, 1);
 
-   codec = avcodec_find_decoder(video_st->codec->codec_id);
-   if (!codec) {
-       fprintf(stderr, "Could not find video decoder, key frames will not be honored\n");
+   if(video_st) {
+    codec = avcodec_find_decoder(video_st->codec->codec_id);
+    if (!codec) {
+      fprintf(stderr, "Could not find video decoder, key frames will not be honored\n");
+    }
+
+    if (avcodec_open2(video_st->codec, codec, NULL) < 0) {
+       fprintf(stderr, "Could not open video decoder, key frames will not be honored\n");
+    }
    }
 
    output_filename = malloc(sizeof(char) * (strlen(ctx->output_prefix) + 15));
    if (!output_filename) {
        fprintf(stderr, "Could not allocate space for output filenames\n");
        exit(1);
-   }
-
-   if (avcodec_open(video_st->codec, codec) < 0) {
-       fprintf(stderr, "Could not open video decoder, key frames will not be honored\n");
    }
 
    snprintf(output_filename, strlen(ctx->output_prefix) + 15, "%s-%u.ts", ctx->output_prefix, output_index++);
@@ -315,8 +319,8 @@ create_segments(struct segment_context * ctx) {
    AVPacketList *liste;
 
    do {
-	   		double segment_time;
-		
+		double segment_time;
+
         decode_done = av_read_frame(ic, &packet);
         if (decode_done < 0) {
             break;
@@ -329,17 +333,21 @@ create_segments(struct segment_context * ctx) {
         }
 
         if (packet.stream_index == video_index && (packet.flags & AV_PKT_FLAG_KEY)) {
-            segment_time = (double)video_st->pts.val * video_st->time_base.num / video_st->time_base.den;
+            segment_time = packet.pts * av_q2d(video_st->time_base);
         }
         else if (video_index < 0) {
-            segment_time = (double)audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
+            segment_time = packet.pts * av_q2d(audio_st->time_base);
+        }
+        else {
+          segment_time = prev_segment_time;
         }
 
         if (segment_time - prev_segment_time >= ctx->segment_duration) {	
             avio_flush(oc->pb);
             avio_close(oc->pb);
 
-						index_file_write_segment(ctx, floor(segment_time - prev_segment_time), output_index-1);
+			if(write_index >= 0)
+              index_file_write_segment(ctx, floor(segment_time - prev_segment_time), output_index-1);
 						
 						snprintf(output_filename, strlen(ctx->output_prefix) + 15, "%s-%u.ts", ctx->output_prefix, output_index++);
             if (avio_open(&oc->pb, output_filename, AVIO_FLAG_WRITE) < 0) {
@@ -365,12 +373,15 @@ create_segments(struct segment_context * ctx) {
         av_free_packet(&packet);
     } while (1); /* loop is exited on break */
 
-		double input_duration = (double)ic->duration / 1000000;
-		index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
+    double input_duration = (double)ic->duration / 1000000;
+
+    if(write_index >= 0)
+	   index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
 
     av_write_trailer(oc);
 
-    avcodec_close(video_st->codec);
+    if(video_st)
+      avcodec_close(video_st->codec);
 
     for(i = 0; i < oc->nb_streams; i++) {
         av_freep(&oc->streams[i]->codec);
@@ -380,13 +391,8 @@ create_segments(struct segment_context * ctx) {
     avio_close(oc->pb);
     av_free(oc);
 
-    index_file_close(ctx);
-}
-
-void 
-debug_context(struct segment_context *ctx) {
-	printf ("base_url = %s, duration = %i, index file = %s, prefix = %s,  input %s\n", 
-			ctx->base_url, ctx->segment_duration, ctx->index_file, ctx->output_prefix, ctx->input);
+    if(write_index >= 0)
+      index_file_close(ctx);
 }
 
 void 
@@ -439,21 +445,15 @@ main (int argc, char **argv)
         exit(1);
       }
 
-	if(argc <= 1) {
+	if(argc < 1) {
 		display_usage();
 	}	
 
-  if (ctx.input == NULL) {
+    if (ctx.input == NULL && ctx.index_file) {
       fprintf(stderr, "Using stdin as input.\n");
-  }
+    }
 
-  if (ctx.index_file == NULL) {
-      fprintf(stderr, "Please specify an m3u8 index file.\n\n");
-			display_usage();
-      exit(1);
-  }
-
-	if(ctx.output_prefix == NULL) {
+	if(ctx.output_prefix == NULL && !ctx.index_file == NULL) {
 		
 		char * dot = strrchr(ctx.index_file,'.');
 		if (dot == NULL) {
@@ -466,7 +466,11 @@ main (int argc, char **argv)
 		strncpy(ctx.output_prefix, ctx.index_file , size);
 	}
 	
-	// debug_context(&ctx);
+    if (ctx.output_prefix == NULL) {
+        fprintf(stderr,"Output prefix unspecified: %s", ctx.output_prefix);
+        exit(4);
+    }
+
 	create_segments(&ctx);
 	
 	segment_context_free(&ctx);
