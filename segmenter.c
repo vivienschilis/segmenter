@@ -457,7 +457,7 @@ main (int argc, char **argv)
 		
 		char * dot = strrchr(ctx.index_file,'.');
 		if (dot == NULL) {
-			fprintf(stderr,"Problem with name in file: %s", ctx.index_file);
+			fprintf(stderr,"Problem with name in file: %s\n", ctx.index_file);
 			exit(4);
 		}
 		
@@ -467,7 +467,7 @@ main (int argc, char **argv)
 	}
 	
     if (ctx.output_prefix == NULL) {
-        fprintf(stderr,"Output prefix unspecified");
+        fprintf(stderr,"Output prefix unspecified\n");
         exit(4);
     }
 
