@@ -40,7 +40,8 @@ void display_usage()
   printf("\n");
   printf("-i\t TS file to segment (Use - for stdin)\n");
   printf("-t\t Duration of each segment (default: 10 seconds)\n");
-  printf("-p\t Prefix for the TS segments, will be appended\n");
+  printf("-o\t Prefix for the TS segments, will be appended\n");
+  printf("-p\t Index Precision (1.ts, 01.ts, 001.ts, default: 1)\n");
   printf("-I\t M3U8 index filename\n");
   printf("-b\t Base url for web address of segments, e.g. http://example.org/video/\n");
   printf("-h\t This help\n");
@@ -429,36 +430,36 @@ main (int argc, char **argv)
 
   while ((c = getopt (argc, argv, "b:t:I:o:p:i:h")) != -1)
     switch (c)
-  {
-    case 'b':
-    ctx.base_url = optarg;
-    break;
-    case 'p':
-    ctx.precision = atoi(optarg);
-    break;
-    case 'o':
-    ctx.output_prefix = optarg;
-    break;
-    case 'i':
-    ctx.input = optarg;
-    break;
-    case 'I':
-    ctx.index_file = optarg;
-    break;
-    case 'h':
-    display_usage();
-    break;
-    case 't':
-    ctx.segment_duration = strtod(optarg, &segment_duration_check);
-    if (segment_duration_check == optarg || ctx.segment_duration == HUGE_VAL || ctx.segment_duration == -HUGE_VAL) {
-      fprintf(stderr, "Segment duration time (%s) invalid\n", optarg);
+    {
+      case 'b':
+      ctx.base_url = optarg;
+      break;
+      case 'p':
+      ctx.precision = atoi(optarg);
+      break;
+      case 'o':
+      ctx.output_prefix = optarg;
+      break;
+      case 'i':
+      ctx.input = optarg;
+      break;
+      case 'I':
+      ctx.index_file = optarg;
+      break;
+      case 'h':
+      display_usage();
+      break;
+      case 't':
+      ctx.segment_duration = strtod(optarg, &segment_duration_check);
+      if (segment_duration_check == optarg || ctx.segment_duration == HUGE_VAL || ctx.segment_duration == -HUGE_VAL) {
+        fprintf(stderr, "Segment duration time (%s) invalid\n", optarg);
+        exit(1);
+      }
+      break;
+
+      default:
       exit(1);
     }
-    break;
-
-    default:
-    exit(1);
-  }
 
   if(argc < 1) {
     display_usage();
