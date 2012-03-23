@@ -118,7 +118,7 @@ index_file_close(struct segment_context * ctx){
 
 
 void 
-index_file_write_segment(struct segment_context * ctx, const unsigned int segment_duration,  const unsigned int segment_number){
+index_file_write_segment(struct segment_context * ctx, const unsigned int segment_duration,  char *filename){
   char *write_buf;
 
   write_buf = malloc(sizeof(char) * 1024);
@@ -128,7 +128,7 @@ index_file_write_segment(struct segment_context * ctx, const unsigned int segmen
     exit(1);
   }
 
-  snprintf(write_buf, 1024, "#EXTINF:%u,\n%s%s-%u.ts\n", segment_duration, ctx->base_url, ctx->output_prefix, segment_number);
+  sprintf(write_buf, "#EXTINF:%u,\n%s%s\n", segment_duration, ctx->base_url, filename);
   if (fwrite(write_buf, strlen(write_buf), 1, ctx->index_fp) != 1) {
     fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
     free(write_buf);
@@ -330,6 +330,7 @@ AVPacket packet;
 AVPacketList *liste;
 
 do {
+
   double segment_time;
 
   decode_done = av_read_frame(ic, &packet);
@@ -358,7 +359,7 @@ do {
     avio_close(oc->pb);
 
     if(write_index >= 0)
-      index_file_write_segment(ctx, floor(segment_time - prev_segment_time), output_index-1);
+      index_file_write_segment(ctx, floor(segment_time - prev_segment_time), output_filename);
 
     sprintf(output_filename, output_format, ctx->output_prefix, output_index++);
 
@@ -383,17 +384,17 @@ do {
   }
 
   av_free_packet(&packet);
-    } while (1); /* loop is exited on break */
+} while (1); /* loop is exited on break */
 
-  double input_duration = (double)ic->duration / 1000000;
+double input_duration = (double)ic->duration / 1000000;
 
-  if(write_index >= 0)
-   index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_index-1);
+if(write_index >= 0)
+ index_file_write_segment(ctx, ceil(input_duration - prev_segment_time), output_filename);
 
- av_write_trailer(oc);
+av_write_trailer(oc);
 
- if(video_st)
-  avcodec_close(video_st->codec);
+if(video_st)
+avcodec_close(video_st->codec);
 
 for(i = 0; i < oc->nb_streams; i++) {
   av_freep(&oc->streams[i]->codec);
