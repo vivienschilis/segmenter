@@ -327,7 +327,6 @@ if (avformat_write_header(oc, NULL) < 0) {
 }
 
 AVPacket packet;
-AVPacketList *liste;
 
 do {
 
@@ -345,10 +344,10 @@ do {
   }
 
   if (packet.stream_index == video_index && (packet.flags & AV_PKT_FLAG_KEY)) {
-    segment_time = (double)video_st->pts.val * video_st->time_base.num / video_st->time_base.den;
+    segment_time = packet.pts * av_q2d(video_st->time_base);
   }
   else if (video_index < 0) {
-    segment_time = (double)audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
+    segment_time = packet.pts * av_q2d(audio_st->time_base);
   }
   else {
     segment_time = prev_segment_time;
