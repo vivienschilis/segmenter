@@ -1,5 +1,5 @@
 all:
-	gcc -Wall -g segmenter.c -o segmenter -lavformat -lavcodec -lavutil
+	gcc -Wall -g segmenter.c -o segmenter -lavformat -lavcodec -lavutil -lva
 
 clean:
 	rm segmenter
